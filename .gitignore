@@ -1,0 +1,20 @@
+# Screenshots
+/tmp/
+*.png
+*.jpg
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Claude Code
+.claude/
+
+# Don't commit session logs or memory (these are your private data)
+# Uncomment these if you want to keep them private:
+# qa-agent/session-logs/*.md
+# qa-agent/memory/knowledge-base.md
+# qa-agent/memory/bug-tracker.md
+# qa-agent/memory/ux-issues.md
+# qa-agent/memory/growth-ideas.md
+# qa-agent/memory/competitive-intel.md
