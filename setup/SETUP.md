@@ -25,12 +25,21 @@ The MobileRun API cannot send hardware keys (POWER/WAKEUP), so if the phone slee
 
 With these settings, the phone stays awake indefinitely while plugged in.
 
-## Step 2: Install Droidrun Portal
+## Step 2: Install MobileRun Skill + Droidrun Portal
 
-1. Open the Play Store on your phone
-2. Search for **"Droidrun Portal"** and install it
-3. Open the app and sign in with your MobileRun account
-4. The app will show your **Device ID** on the main screen (copy this)
+Droidrun Portal is **not on the Play Store**. You need to install it via the MobileRun SDK or the skill page.
+
+### Option A: Via Skills Marketplace (recommended)
+1. Go to [https://skillsmp.com/skills/droidrun-skills-mobilerun-skill-md](https://skillsmp.com/skills/droidrun-skills-mobilerun-skill-md)
+2. Follow the instructions to install the MobileRun skill and Droidrun Portal APK on your phone
+3. Open the Portal app on your phone and sign in
+4. Note the **Device ID** shown on screen
+
+### Option B: Via MobileRun SDK
+1. Go to [mobilerun.ai](https://mobilerun.ai) and create an account
+2. Follow their SDK documentation to download and install the Droidrun Portal APK on your phone
+3. Open the Portal app on your phone and sign in
+4. Note the **Device ID** shown on screen
 
 ## Step 3: Get Your API Key
 
