@@ -9,13 +9,13 @@
 4. If still disconnected, close and reopen the Droidrun Portal app
 
 ### Phone screen went dark / locked
-The MobileRun API cannot press the power button. You need to:
+The bridge's REST surface has no power-button endpoint. Wake it with `adb shell input keyevent KEYCODE_WAKEUP`, then prevent it recurring:
 1. Physically wake the phone up
 2. Make sure "Stay awake" is enabled in Developer Options
 3. Make sure the phone is plugged in (Stay awake only works while charging)
 
 ### Rate limit errors
-The MobileRun API has rate limits. The agent automatically:
+The local bridge has no rate limits. The legacy MobileRun cloud API does; against it the agent automatically:
 - Waits 2 seconds between API calls
 - Retries up to 3 times with 10-second waits on rate limit errors
 

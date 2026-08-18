@@ -19,7 +19,7 @@ Read ALL of these before doing anything on the phone.
 
 ## Step 0.5 — Phone Sleep Prevention (One-Time Setup)
 
-The MobileRun API CANNOT send hardware keys (POWER/WAKEUP), so if the phone sleeps, the agent stops. **The phone must be configured to never sleep:**
+The bridge's REST surface has no POWER/WAKEUP endpoint, so if the phone sleeps mid-run the agent stops. (Local escape hatch: `adb shell input keyevent KEYCODE_WAKEUP`.) **The phone must be configured to never sleep:**
 
 1. **Keep the phone plugged in** (charging cable)
 2. **Developer Options > "Stay awake"** — toggle ON (keeps screen on while charging)
@@ -33,15 +33,14 @@ If all of these are set, the phone will stay awake indefinitely while plugged in
 
 ## Step 1 — Connect to Phone
 
-API key: `YOUR_API_KEY_HERE`
-Device ID: `YOUR_DEVICE_ID_HERE`
-Base URL: `https://api.mobilerun.ai/v1`
-Auth header: `Authorization: Bearer YOUR_API_KEY_HERE`
+Base URL: `http://localhost:8723/v1` (the local ADB bridge; start it once per session with `local-bridge/start-bridge.sh`)
+Device ID: `local`
+Auth header: not required. The local bridge ignores it; the header stays in the commands below only so they also work unchanged against a legacy MobileRun cloud account (swap the base URL and use your real key).
 
 Check device is ready:
 ```bash
-curl -s "https://api.mobilerun.ai/v1/devices" \
-  -H "Authorization: Bearer YOUR_API_KEY_HERE"
+curl -s "http://localhost:8723/v1/devices" \
+  -H "Authorization: Bearer local"
 ```
 If state is "ready", proceed. If disconnected:
 1. Ask user to open the Droidrun Portal app on the phone and ensure the phone is plugged in
@@ -52,8 +51,8 @@ If state is "ready", proceed. If disconnected:
 
 ### For Web Apps (Chrome)
 ```bash
-curl -s -X PUT "https://api.mobilerun.ai/v1/devices/YOUR_DEVICE_ID_HERE/apps/com.android.chrome" \
-  -H "Authorization: Bearer YOUR_API_KEY_HERE" \
+curl -s -X PUT "http://localhost:8723/v1/devices/local/apps/com.android.chrome" \
+  -H "Authorization: Bearer local" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```
@@ -61,8 +60,8 @@ Then navigate to your app's URL.
 
 ### For Native Apps
 ```bash
-curl -s -X PUT "https://api.mobilerun.ai/v1/devices/YOUR_DEVICE_ID_HERE/apps/YOUR_APP_PACKAGE_HERE" \
-  -H "Authorization: Bearer YOUR_API_KEY_HERE" \
+curl -s -X PUT "http://localhost:8723/v1/devices/local/apps/YOUR_APP_PACKAGE_HERE" \
+  -H "Authorization: Bearer local" \
   -H "Content-Type: application/json" \
   -d '{}'
 ```
@@ -74,7 +73,7 @@ Take a screenshot to verify the app is open.
 ## Phone Control Reference
 
 ### Rate Limit Handling
-The MobileRun API has rate limits. **Always add `sleep 2` between consecutive API calls.** If you get a "Rate limit reached" error, wait 10 seconds and retry (max 3 retries). Use this wrapper for all API calls:
+The local bridge has no rate limits, so no `sleep` is needed between calls. If you point these commands at the legacy MobileRun cloud API instead, add `sleep 2` between consecutive calls and use this retry wrapper:
 
 ```bash
 # Rate-limit-aware API call wrapper (paste once per session)
@@ -99,59 +98,59 @@ mobilerun() {
 }
 ```
 
-Then use `mobilerun` instead of `curl -s` for all device API calls, and **always `sleep 2` between calls**.
+(Cloud only. On the local bridge, plain `curl -s` is fine.)
 
 ```bash
 # Screenshot (auto-resize to stay under 2000px limit)
-curl -s "https://api.mobilerun.ai/v1/devices/YOUR_DEVICE_ID_HERE/screenshot" \
-  -H "Authorization: Bearer YOUR_API_KEY_HERE" \
+curl -s "http://localhost:8723/v1/devices/local/screenshot" \
+  -H "Authorization: Bearer local" \
   -o /tmp/qa_screen_raw.png && \
   sips --resampleHeight 1600 /tmp/qa_screen_raw.png --out /tmp/qa_screen.png 2>/dev/null && \
   rm -f /tmp/qa_screen_raw.png
 
 # UI tree (get tap coordinates)
-curl -s "https://api.mobilerun.ai/v1/devices/YOUR_DEVICE_ID_HERE/ui-state?filter=true" \
-  -H "Authorization: Bearer YOUR_API_KEY_HERE"
+curl -s "http://localhost:8723/v1/devices/local/ui-state?filter=true" \
+  -H "Authorization: Bearer local"
 
 # Tap
-curl -s -X POST "https://api.mobilerun.ai/v1/devices/YOUR_DEVICE_ID_HERE/tap" \
-  -H "Authorization: Bearer YOUR_API_KEY_HERE" \
+curl -s -X POST "http://localhost:8723/v1/devices/local/tap" \
+  -H "Authorization: Bearer local" \
   -H "Content-Type: application/json" \
   -d '{"x": X, "y": Y}'
 
 # Long press
-curl -s -X POST "https://api.mobilerun.ai/v1/devices/YOUR_DEVICE_ID_HERE/swipe" \
-  -H "Authorization: Bearer YOUR_API_KEY_HERE" \
+curl -s -X POST "http://localhost:8723/v1/devices/local/swipe" \
+  -H "Authorization: Bearer local" \
   -H "Content-Type: application/json" \
   -d '{"startX": X, "startY": Y, "endX": X, "endY": Y, "duration": 1000}'
 
 # Type text
-curl -s -X POST "https://api.mobilerun.ai/v1/devices/YOUR_DEVICE_ID_HERE/keyboard" \
-  -H "Authorization: Bearer YOUR_API_KEY_HERE" \
+curl -s -X POST "http://localhost:8723/v1/devices/local/keyboard" \
+  -H "Authorization: Bearer local" \
   -H "Content-Type: application/json" \
   -d '{"text": "message here", "clear": false}'
 
 # Back button
-curl -s -X POST "https://api.mobilerun.ai/v1/devices/YOUR_DEVICE_ID_HERE/global" \
-  -H "Authorization: Bearer YOUR_API_KEY_HERE" \
+curl -s -X POST "http://localhost:8723/v1/devices/local/global" \
+  -H "Authorization: Bearer local" \
   -H "Content-Type: application/json" \
   -d '{"action": 1}'
 
 # Home button
-curl -s -X POST "https://api.mobilerun.ai/v1/devices/YOUR_DEVICE_ID_HERE/global" \
-  -H "Authorization: Bearer YOUR_API_KEY_HERE" \
+curl -s -X POST "http://localhost:8723/v1/devices/local/global" \
+  -H "Authorization: Bearer local" \
   -H "Content-Type: application/json" \
   -d '{"action": 2}'
 
 # Scroll down
-curl -s -X POST "https://api.mobilerun.ai/v1/devices/YOUR_DEVICE_ID_HERE/swipe" \
-  -H "Authorization: Bearer YOUR_API_KEY_HERE" \
+curl -s -X POST "http://localhost:8723/v1/devices/local/swipe" \
+  -H "Authorization: Bearer local" \
   -H "Content-Type: application/json" \
   -d '{"startX": 540, "startY": 1500, "endX": 540, "endY": 400, "duration": 300}'
 
 # Scroll up
-curl -s -X POST "https://api.mobilerun.ai/v1/devices/YOUR_DEVICE_ID_HERE/swipe" \
-  -H "Authorization: Bearer YOUR_API_KEY_HERE" \
+curl -s -X POST "http://localhost:8723/v1/devices/local/swipe" \
+  -H "Authorization: Bearer local" \
   -H "Content-Type: application/json" \
   -d '{"startX": 540, "startY": 400, "endX": 540, "endY": 1500, "duration": 300}'
 ```

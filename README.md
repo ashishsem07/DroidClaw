@@ -2,7 +2,7 @@
 
 **Give Claude a real phone. Let it test your app autonomously.**
 
-No scripts. No Selenium. No test frameworks. Just an AI agent controlling a real Android phone: tapping buttons, typing messages, taking screenshots, and filing bug reports.
+No scripts. No Selenium. No test frameworks. No cloud service. Just an AI agent controlling a real Android phone over plain ADB: tapping buttons, typing messages, taking screenshots, and filing bug reports.
 
 ## What This Does
 
@@ -15,7 +15,7 @@ This repo contains a ready-to-use **autonomous QA agent** that:
 - Maintains a knowledge base and compiles daily QA reports
 - Compares your app against competitors
 
-The agent runs on **Claude Code + MobileRun API**. The phone sits on your desk doing its thing while you work on something else.
+The agent runs on **Claude Code + a bundled local ADB bridge** (`local-bridge/`). No cloud relay, no API key, no subscription, no device slots. The phone sits on your desk doing its thing while you work on something else.
 
 ## Quick Start
 
@@ -23,14 +23,14 @@ The agent runs on **Claude Code + MobileRun API**. The phone sits on your desk d
 
 - An Android phone (any recent model works)
 - A [Claude Pro or Max](https://claude.ai/pricing) subscription (for Claude Code)
-- A [MobileRun](https://mobilerun.ai) account and API key
-- ~30 minutes for initial setup
+- `adb` installed (`brew install android-platform-tools` on macOS)
+- ~15 minutes for initial setup
 
 ### Setup
 
 1. Clone this repo
 2. Install [Claude Code](https://docs.anthropic.com/en/docs/claude-code) if you haven't already
-3. Follow the [Setup Guide](setup/SETUP.md) to connect your phone
+3. Follow the [Setup Guide](setup/SETUP.md): enable USB debugging, plug the phone in, start the bridge
 4. Edit `qa-agent/PRODUCT-KNOWLEDGE.md` with your app's details
 5. Open Claude Code in this directory and say: **"Run the QA agent"**
 
@@ -45,7 +45,7 @@ You: "Run the QA agent"
 Claude reads CLAUDE.md -> loads agent config
   |
   v
-Connects to phone via MobileRun API
+Talks to the phone via the local ADB bridge (localhost REST)
   |
   v
 Opens your app, starts testing features
@@ -59,12 +59,23 @@ Updates knowledge base, compiles daily report
 
 The agent uses a structured memory system to track what it has tested, what bugs it has found, and what needs attention. Each session builds on the last.
 
+### The local bridge
+
+`local-bridge/adb-bridge.py` is a small dependency-free Python server that exposes a REST API on `http://localhost:8723/v1` (devices, screenshot, ui-state, tap, swipe, keyboard, global keys, app launch) and executes everything over plain ADB. It speaks the same v1 dialect as the MobileRun cloud API, so anything written against that API works unchanged by swapping the base URL. Start it with:
+
+```bash
+local-bridge/start-bridge.sh
+```
+
 ## Repo Structure
 
 ```
 CLAUDE.md                       <- Claude reads this automatically (the magic)
+local-bridge/
+  adb-bridge.py                 <- Local REST-over-ADB server (the phone control layer)
+  start-bridge.sh               <- One-command bridge startup
 setup/
-  SETUP.md                      <- Phone + MobileRun setup guide
+  SETUP.md                      <- Phone + bridge setup guide
   TROUBLESHOOTING.md            <- Common issues and fixes
 qa-agent/
   RUN.md                        <- Agent execution instructions
@@ -112,10 +123,13 @@ Each use case just needs a different set of instructions (RUN.md, PERSONA.md, BE
 Any Android phone running Android 10+. We used a OnePlus 10, but budget phones work fine too.
 
 **Does it work with iOS?**
-Not yet. MobileRun currently supports Android only.
+Not yet. The bridge drives Android via ADB and its accessibility tree; iOS has no equivalent open path.
 
 **How much does it cost?**
-Claude Pro ($20/month) or Max ($100/month) + MobileRun API costs. No other infrastructure needed.
+Claude Pro ($20/month) or Max ($100/month). Nothing else - the bridge is local and free.
+
+**Do I still need MobileRun?**
+No. Earlier versions of this repo ran on the MobileRun cloud API. The bundled local bridge is a drop-in replacement for it (same REST endpoints), so there is no account, key, or per-device cost. If you do have a MobileRun-style cloud setup, the agent commands work against it unchanged by swapping the base URL back.
 
 **Can it actually post/interact or just read?**
 It has full control: tap, type, scroll, swipe, take screenshots. It can do anything you can do on the phone.
