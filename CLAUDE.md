@@ -1,25 +1,28 @@
 # Phone an AI Agent
 
 ## What This Is
-An autonomous QA agent that tests mobile apps on a real Android phone using Claude Code + MobileRun API.
+An autonomous QA agent that tests mobile apps on a real Android phone, using Claude Code + a local ADB bridge (`local-bridge/adb-bridge.py`, REST on `http://localhost:8723/v1`).
 
 ## Quick Start
 When the user says "run the QA agent" or similar:
 1. Read `qa-agent/RUN.md` and follow all steps
 2. The RUN.md will tell you to load PERSONA.md, BEHAVIOR.md, PRODUCT-KNOWLEDGE.md, and memory files
-3. Connect to the phone via MobileRun API
+3. Make sure the local bridge is running (`local-bridge/start-bridge.sh`); connect to the phone through it
 4. Start testing
 
 ## First Time Setup
 If the user hasn't set up their phone yet, guide them through `setup/SETUP.md`:
-1. Help them install the MobileRun/Droidrun Portal app on their Android phone
-2. Help them get their API key and Device ID from mobilerun.ai
-3. Have them update `qa-agent/RUN.md` with their credentials
-4. Run a sanity check (screenshot the home screen)
+1. Help them install `adb` and enable USB debugging on the phone
+2. Plug the phone in (or `adb connect` over Wi-Fi) and verify `adb devices` shows it
+3. Start the bridge: `local-bridge/start-bridge.sh`
+4. Run a sanity check (screenshot the home screen via the bridge)
 5. Have them edit `qa-agent/PRODUCT-KNOWLEDGE.md` with their app's details
 
 ## File Structure
 ```
+local-bridge/
+  adb-bridge.py           <- Local REST-over-ADB server (the phone control layer)
+  start-bridge.sh         <- One-command bridge startup
 qa-agent/
   RUN.md                  <- START HERE: Main execution file
   PERSONA.md              <- How the agent thinks and evaluates
