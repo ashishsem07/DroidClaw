@@ -3,6 +3,9 @@
 ## What This Is
 An autonomous QA agent that tests mobile apps on a real Android phone, using Claude Code + a local ADB bridge (`local-bridge/adb-bridge.py`, REST on `http://localhost:8723/v1`).
 
+## Controlling the Phone
+For any phone task (QA or not), follow `skills/phone-control/SKILL.md`. Short version: `local-bridge/phonectl health`, then look (`shot`) -> locate (`ui`) -> act (`tap`/`type`/`swipe`) -> verify (`shot`).
+
 ## Quick Start
 When the user says "run the QA agent" or similar:
 1. Read `qa-agent/RUN.md` and follow all steps
@@ -23,6 +26,9 @@ If the user hasn't set up their phone yet, guide them through `setup/SETUP.md`:
 local-bridge/
   adb-bridge.py           <- Local REST-over-ADB server (the phone control layer)
   start-bridge.sh         <- One-command bridge startup
+  phonectl                <- CLI: health, unlock, shot, ui, tap, type, swipe, open...
+skills/phone-control/
+  SKILL.md                <- How any agent drives the phone (portable)
 qa-agent/
   RUN.md                  <- START HERE: Main execution file
   PERSONA.md              <- How the agent thinks and evaluates

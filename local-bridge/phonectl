@@ -1,0 +1,268 @@
+#!/usr/bin/env python3
+"""
+phonectl - one-line phone commands for agents and humans.
+
+Talks to the ADB bridge (local-bridge/adb-bridge.py). Start the bridge first:
+    local-bridge/start-bridge.sh
+
+    phonectl health                   # device attached? battery? screen asleep/locked?
+    phonectl unlock                   # wake + dismiss lockscreen (PIN from PHONE_PIN)
+    phonectl shot [out.png] [--max-height=1600]
+    phonectl ui [substring]           # labelled elements as `(TAP) (x,y) label`
+    phonectl tap X Y
+    phonectl swipe X1 Y1 X2 Y2 [ms]
+    phonectl scroll down|up
+    phonectl type "some text" [--clear]
+    phonectl back | home | recents | enter | wake
+    phonectl key <keycode>
+    phonectl open <package>
+    phonectl deeplink <url> [package]
+    phonectl shell "<adb shell cmd>"  # needs PHONE_BRIDGE_ALLOW_SHELL=1 on the bridge
+    phonectl reconnect
+
+Environment:
+    PHONE_BRIDGE_URL    default http://localhost:8723/v1
+    PHONE_BRIDGE_TOKEN  sent as a Bearer token if set
+"""
+import json
+import os
+import sys
+import tempfile
+import urllib.error
+import urllib.request
+
+BASE = os.environ.get("PHONE_BRIDGE_URL", "http://localhost:8723/v1").rstrip("/")
+TOKEN = os.environ.get("PHONE_BRIDGE_TOKEN", "").strip()
+DEFAULT_SHOT = os.path.join(tempfile.gettempdir(), "phone.png")
+
+
+def die(msg, code=1):
+    print(f"phonectl: {msg}", file=sys.stderr)
+    sys.exit(code)
+
+
+def request(method, path, payload=None, raw=False, timeout=90):
+    data = json.dumps(payload).encode() if payload is not None else None
+    req = urllib.request.Request(BASE + path, data=data, method=method)
+    if TOKEN:
+        req.add_header("Authorization", f"Bearer {TOKEN}")
+    if data:
+        req.add_header("Content-Type", "application/json")
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            body = r.read()
+    except urllib.error.HTTPError as e:
+        text = e.read().decode("utf-8", "replace")
+        try:
+            parsed = json.loads(text)
+        except json.JSONDecodeError:
+            parsed = {"detail": text[:400]}
+        if e.code == 401:
+            die("unauthorized - set PHONE_BRIDGE_TOKEN to the bridge's token")
+        if e.code == 409:  # e.g. unlock that did not take; caller reports it
+            return parsed
+        die(f"HTTP {e.code}: {parsed.get('detail', parsed)}")
+    except urllib.error.URLError as e:
+        die(f"cannot reach the bridge at {BASE}: {e.reason}\n"
+            "  start it with:  local-bridge/start-bridge.sh")
+    if raw:
+        return body
+    try:
+        return json.loads(body or b"{}")
+    except json.JSONDecodeError:
+        return {"raw": body.decode("utf-8", "replace")}
+
+
+def dev(path):
+    return "/devices/local" + path
+
+
+def flatten(node, out=None):
+    out = [] if out is None else out
+    if node:
+        label = (node.get("text") or node.get("contentDescription") or "").strip()
+        b = node.get("boundsInScreen") or {}
+        if label and (b.get("right", 0) or b.get("bottom", 0)):
+            x = (b.get("left", 0) + b.get("right", 0)) // 2
+            y = (b.get("top", 0) + b.get("bottom", 0)) // 2
+            out.append((x, y, label, bool(node.get("isClickable"))))
+        for c in node.get("children") or []:
+            flatten(c, out)
+    return out
+
+
+# ---- commands ------------------------------------------------------------
+
+def cmd_health(_):
+    h = request("GET", "/health", timeout=30)
+    ok = h.get("ok")
+    print(f"{'UP' if ok else 'NO DEVICE'}  {h.get('device') or '?'}  "
+          f"Android {h.get('android') or '?'}  bridge v{h.get('version')}")
+    print(f"  serial   : {h.get('serial') or '-'}")
+    if h.get("adb_error"):
+        print(f"  error    : {h['adb_error']}")
+    bat = h.get("battery") or {}
+    if bat:
+        charging = bat.get("ac_powered") == "true" or bat.get("usb_powered") == "true"
+        print(f"  battery  : {bat.get('level')}%  {'charging' if charging else 'on battery'}")
+    scr = h.get("screen") or {}
+    if scr:
+        locked = scr.get("locked")
+        print(f"  screen   : {'awake' if scr.get('awake') else 'ASLEEP'}, "
+              f"{'locked' if locked else 'unlocked' if locked is False else 'lock state unknown'}"
+              + ("   -> phonectl unlock" if (not scr.get("awake") or locked) else ""))
+    sys.exit(0 if ok else 2)
+
+
+def cmd_shot(args):
+    out = next((a for a in args if not a.startswith("--")), DEFAULT_SHOT)
+    mh = 1600
+    for a in args:
+        if a.startswith("--max-height="):
+            mh = int(a.split("=", 1)[1])
+    png = request("GET", dev(f"/screenshot?max_height={mh}"), raw=True)
+    with open(out, "wb") as fh:
+        fh.write(png)
+    print(f"{out}  ({len(png) // 1024} KB)")
+    # A sleeping phone captures as solid black, which looks like a broken bridge.
+    if len(png) < 40_000:
+        print("  note: very small capture - the screen may be off. Try: phonectl unlock",
+              file=sys.stderr)
+
+
+def cmd_ui(args):
+    needle = args[0].lower() if args else ""
+    tree = request("GET", dev("/ui-state?filter=true"))
+    rows = flatten(tree.get("a11y_tree"))
+    if not rows:
+        print("(no labelled elements - is the screen off? try: phonectl unlock)")
+        return
+    for x, y, label, clickable in rows:
+        if needle and needle not in label.lower():
+            continue
+        print(f"{'(TAP)' if clickable else '     '} ({x},{y}) {label[:80]}")
+
+
+def cmd_tap(args):
+    if len(args) < 2:
+        die("usage: phonectl tap X Y")
+    request("POST", dev("/tap"), {"x": int(args[0]), "y": int(args[1])})
+    print(f"tapped ({args[0]},{args[1]})")
+
+
+def cmd_swipe(args):
+    if len(args) < 4:
+        die("usage: phonectl swipe X1 Y1 X2 Y2 [duration_ms]")
+    request("POST", dev("/swipe"), {
+        "startX": int(args[0]), "startY": int(args[1]),
+        "endX": int(args[2]), "endY": int(args[3]),
+        "duration": int(args[4]) if len(args) > 4 else 300})
+    print("swiped")
+
+
+def cmd_scroll(args):
+    direction = args[0] if args else "down"
+    if direction not in ("down", "up"):
+        die("usage: phonectl scroll down|up")
+    # Screen-relative so it works on any resolution: middle column, 70% <-> 30%.
+    size = request("GET", dev("")).get("screenSize") or {}
+    w, h = size.get("width", 1080), size.get("height", 2400)
+    top, bottom = int(h * 0.3), int(h * 0.7)
+    y1, y2 = (bottom, top) if direction == "down" else (top, bottom)
+    request("POST", dev("/swipe"), {"startX": w // 2, "startY": y1,
+                                    "endX": w // 2, "endY": y2, "duration": 350})
+    print(f"scrolled {direction}")
+
+
+def cmd_type(args):
+    if not args:
+        die('usage: phonectl type "text" [--clear]')
+    clear = "--clear" in args
+    text = " ".join(a for a in args if a != "--clear")
+    request("POST", dev("/keyboard"), {"text": text, "clear": clear})
+    print(f"typed {len(text)} chars")
+
+
+def cmd_global(action, name):
+    def run(_):
+        request("POST", dev("/global"), {"action": action})
+        print(name)
+    return run
+
+
+def cmd_key(args):
+    if not args:
+        die("usage: phonectl key <keycode>   (66=enter 67=backspace 4=back)")
+    request("POST", dev("/key"), {"keycode": int(args[0])})
+    print(f"key {args[0]}")
+
+
+def cmd_enter(_):
+    cmd_key(["66"])
+
+
+def cmd_wake(_):
+    request("POST", dev("/wake"), {"stayon": True})
+    print("awake (stay-on enabled)")
+
+
+def cmd_unlock(_):
+    r = request("POST", dev("/unlock"), {}, timeout=60)
+    screen = r.get("screen") or {}
+    print(f"{r.get('detail')}  (awake={screen.get('awake')}, locked={screen.get('locked')})")
+    if not r.get("ok"):
+        sys.exit(2)
+
+
+def cmd_open(args):
+    if not args:
+        die("usage: phonectl open <package>")
+    request("PUT", dev(f"/apps/{args[0]}"), {})
+    print(f"launched {args[0]}")
+
+
+def cmd_deeplink(args):
+    if not args:
+        die("usage: phonectl deeplink <url> [package]")
+    payload = {"url": args[0]}
+    if len(args) > 1:
+        payload["package"] = args[1]
+    r = request("POST", dev("/deeplink"), payload)
+    print(r.get("output", "").strip() or "opened")
+
+
+def cmd_shell(args):
+    if not args:
+        die('usage: phonectl shell "<command>"')
+    r = request("POST", dev("/shell"), {"cmd": " ".join(args)})
+    sys.stdout.write(r.get("output", ""))
+
+
+def cmd_reconnect(_):
+    r = request("POST", dev("/reconnect"), {})
+    print(f"{'attached' if r.get('ok') else 'FAILED'}: {r.get('serial') or r.get('detail')}")
+
+
+COMMANDS = {
+    "health": cmd_health, "shot": cmd_shot, "ui": cmd_ui,
+    "tap": cmd_tap, "swipe": cmd_swipe, "scroll": cmd_scroll, "type": cmd_type,
+    "back": cmd_global(1, "back"), "home": cmd_global(2, "home"),
+    "recents": cmd_global(3, "recents"), "enter": cmd_enter, "key": cmd_key,
+    "wake": cmd_wake, "unlock": cmd_unlock,
+    "open": cmd_open, "deeplink": cmd_deeplink,
+    "shell": cmd_shell, "reconnect": cmd_reconnect,
+}
+
+
+def main():
+    if len(sys.argv) < 2 or sys.argv[1] in ("-h", "--help", "help"):
+        print(__doc__.strip())
+        sys.exit(0)
+    cmd = sys.argv[1]
+    if cmd not in COMMANDS:
+        die(f"unknown command '{cmd}'. Try: phonectl --help")
+    COMMANDS[cmd](sys.argv[2:])
+
+
+if __name__ == "__main__":
+    main()

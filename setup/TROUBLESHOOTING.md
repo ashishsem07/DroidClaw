@@ -3,16 +3,24 @@
 ## Phone Connection Issues
 
 ### "Device not found" or "disconnected"
-1. Open the Droidrun Portal app on your phone and check it shows "Connected"
-2. Make sure the phone is plugged in and the screen is on
-3. Wait 15 seconds, then retry the device check
-4. If still disconnected, close and reopen the Droidrun Portal app
+1. Run `local-bridge/phonectl health`. It tells you whether the bridge is up, whether a device is attached, and whether the screen is asleep.
+2. `cannot reach the bridge`: start it with `local-bridge/start-bridge.sh`.
+3. `NO DEVICE`: check `adb devices`. Replug the cable and accept the "Allow USB debugging" prompt. Over Wi-Fi, re-run `adb connect <ip>:5555`. Then `local-bridge/phonectl reconnect`.
+4. Shows `unauthorized`: accept the prompt on the phone (tick "Always allow from this computer").
 
 ### Phone screen went dark / locked
-The bridge's REST surface has no power-button endpoint. Wake it with `adb shell input keyevent KEYCODE_WAKEUP`, then prevent it recurring:
-1. Physically wake the phone up
-2. Make sure "Stay awake" is enabled in Developer Options
-3. Make sure the phone is plugged in (Stay awake only works while charging)
+Symptom: all-black screenshots and an empty UI tree. Run `local-bridge/phonectl unlock`. It wakes the screen, swipes the lockscreen away, and enters a PIN if you started the bridge with `PHONE_PIN=1234` (or wrote it to `~/.phone-bridge/pin`). The PIN never leaves your machine. To prevent it recurring:
+1. Make sure "Stay awake" is enabled in Developer Options
+2. Make sure the phone is plugged in (Stay awake only works while charging)
+
+### Text types wrong or not at all
+`input text` is ASCII only: emoji and non-Latin scripts are dropped, a leading `#` can be swallowed, and some keyboards autocorrect. Tap the field first, type, then screenshot before sending. For full Unicode install [ADBKeyboard](https://github.com/senzhk/ADBKeyBoard).
+
+### Screenshots are large
+Install Pillow (`pip install pillow`) and the bridge downscales on `?max_height=1600` (the CLI default). Without it you get full resolution.
+
+### `shell endpoint is disabled`
+Working as intended. It is arbitrary command execution, so it is off unless you start the bridge with `PHONE_BRIDGE_ALLOW_SHELL=1`.
 
 ### Rate limit errors
 The local bridge has no rate limits. The legacy MobileRun cloud API does; against it the agent automatically:

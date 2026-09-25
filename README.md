@@ -61,11 +61,36 @@ The agent uses a structured memory system to track what it has tested, what bugs
 
 ### The local bridge
 
-`local-bridge/adb-bridge.py` is a small dependency-free Python server that exposes a REST API on `http://localhost:8723/v1` (devices, screenshot, ui-state, tap, swipe, keyboard, global keys, app launch) and executes everything over plain ADB. It speaks the same v1 dialect as the MobileRun cloud API, so anything written against that API works unchanged by swapping the base URL. Start it with:
+`local-bridge/adb-bridge.py` is a small dependency-free Python server that exposes a REST API on `http://localhost:8723/v1` and executes everything over plain ADB. It speaks the same v1 dialect as the MobileRun cloud API, so anything written against that API works unchanged by swapping the base URL. Start it with:
 
 ```bash
 local-bridge/start-bridge.sh
 ```
+
+Endpoints: devices, screenshot (optionally downscaled), ui-state (accessibility tree with coordinates), tap, swipe, keyboard, back/home/recents, any keycode, app launch, deep links, wake, unlock, health, and reconnect. It re-attaches by itself when the phone is replugged or Wi-Fi ADB drops. By default it listens on `127.0.0.1` only, needs no auth, and keeps the raw `shell` endpoint off. Set `PHONE_BRIDGE_TOKEN` to require a bearer token. It refuses to listen on any other address without one.
+
+`local-bridge/phonectl` wraps the API in one-line commands:
+
+```bash
+local-bridge/phonectl health          # attached? battery? screen asleep/locked?
+local-bridge/phonectl unlock          # wake + dismiss lockscreen
+local-bridge/phonectl shot            # screenshot -> /tmp/phone.png
+local-bridge/phonectl ui              # (TAP) (x,y) label  for every labelled element
+local-bridge/phonectl tap 540 1200
+local-bridge/phonectl type "hello" --clear
+local-bridge/phonectl open com.android.chrome
+```
+
+## Give Any Agent a Phone
+
+The QA agent is one use. The phone-control layer works with any agent that can run a shell command or make an HTTP request: Claude Code, Codex, Cursor, or your own tool-calling loop.
+
+1. Plug the phone in and start the bridge (`local-bridge/start-bridge.sh`).
+2. Give the agent [`skills/phone-control/SKILL.md`](skills/phone-control/SKILL.md). It holds the whole contract: health check, the look -> locate -> act -> verify loop, every command, the raw HTTP API, gotchas, and safety rules.
+   - **Claude Code:** copy the folder to `~/.claude/skills/phone-control/` (or `.claude/skills/` in your project) and it loads automatically.
+   - **Codex and other agents that read `AGENTS.md`:** this repo's `AGENTS.md` already points there. For another project, paste the file into its instructions.
+   - **Custom agents:** expose `phonectl` (or the HTTP endpoints) as tools and put the SKILL.md text in the system prompt.
+3. Ask for a task in plain words: "open Chrome and search for the weather", "check the latest message in Telegram".
 
 ## Repo Structure
 
@@ -74,6 +99,10 @@ CLAUDE.md                       <- Claude reads this automatically (the magic)
 local-bridge/
   adb-bridge.py                 <- Local REST-over-ADB server (the phone control layer)
   start-bridge.sh               <- One-command bridge startup
+  phonectl                      <- One-line phone commands (CLI over the bridge)
+skills/
+  phone-control/SKILL.md        <- Portable guide: how any agent drives the phone
+AGENTS.md                       <- Pointer for non-Claude agents
 setup/
   SETUP.md                      <- Phone + bridge setup guide
   TROUBLESHOOTING.md            <- Common issues and fixes

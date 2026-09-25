@@ -19,13 +19,12 @@ Read ALL of these before doing anything on the phone.
 
 ## Step 0.5 — Phone Sleep Prevention (One-Time Setup)
 
-The bridge's REST surface has no POWER/WAKEUP endpoint, so if the phone sleeps mid-run the agent stops. (Local escape hatch: `adb shell input keyevent KEYCODE_WAKEUP`.) **The phone must be configured to never sleep:**
+If the phone sleeps mid-run, screenshots come back black and the UI tree comes back empty. Recover with `local-bridge/phonectl unlock` (or `curl -s -X POST http://localhost:8723/v1/devices/local/unlock`). To avoid it in the first place, **configure the phone to never sleep:**
 
 1. **Keep the phone plugged in** (charging cable)
 2. **Developer Options > "Stay awake"** — toggle ON (keeps screen on while charging)
    - To enable Developer Options: Settings > About Phone > tap "Build number" 7 times
 3. **Settings > Display > Screen timeout** — set to maximum (30 min)
-4. **Settings > Battery > Battery optimization** — set Droidrun Portal to "Unrestricted"
 
 If all of these are set, the phone will stay awake indefinitely while plugged in.
 
@@ -43,7 +42,7 @@ curl -s "http://localhost:8723/v1/devices" \
   -H "Authorization: Bearer local"
 ```
 If state is "ready", proceed. If disconnected:
-1. Ask user to open the Droidrun Portal app on the phone and ensure the phone is plugged in
+1. Run `local-bridge/phonectl health` to see why (bridge down, no device, or screen asleep). Screen asleep: `local-bridge/phonectl unlock`. No device: ask the user to check the cable and accept the USB debugging prompt, then `local-bridge/phonectl reconnect`
 2. Wait 15 seconds, then re-check device state
 3. Retry up to 3 times with 15-second waits before giving up
 
@@ -232,7 +231,7 @@ Run this loop continuously:
 7. **Log every action** to session log
 8. **Keepalive:** During any idle wait longer than 60 seconds, take a screenshot mid-wait to keep the phone awake and verify the device is still connected. If disconnected:
    - Log the disconnection in the session log
-   - Ask the user to check the phone (ensure it's plugged in, Portal is open)
+   - Run `local-bridge/phonectl health`; if the screen is asleep run `local-bridge/phonectl unlock`, if no device is attached ask the user to check the cable
    - Retry device check every 15 seconds, up to 3 times
    - If it comes back, resume. If not, end session gracefully (save all memory/logs first)
 9. **Repeat**

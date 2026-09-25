@@ -4,6 +4,7 @@
 #
 #   local-bridge/start-bridge.sh
 #   ADB_SERIAL=<serial> PORT=8723 local-bridge/start-bridge.sh
+#   PHONE_PIN=1234 local-bridge/start-bridge.sh      # lets `phonectl unlock` enter the PIN
 set -e
 HERE="$(cd "$(dirname "$0")" && pwd)"
 
@@ -15,4 +16,4 @@ fi
 echo "ADB devices:"
 adb devices | sed 's/^/  /'
 
-PORT="${PORT:-8723}" python3 "$HERE/adb-bridge.py"
+exec env PORT="${PORT:-8723}" python3 "$HERE/adb-bridge.py"

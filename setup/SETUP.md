@@ -18,7 +18,7 @@ No accounts, no API keys. The phone control layer is the bundled local bridge (`
 4. Toggle **USB debugging** ON
 
 ### Prevent Phone From Sleeping
-The bridge's REST surface has no POWER/WAKEUP endpoint, so if the phone sleeps mid-run the agent stops. (Escape hatch if it happens: `adb shell input keyevent KEYCODE_WAKEUP`.)
+If the phone sleeps mid-run the agent sees black screenshots. `local-bridge/phonectl unlock` recovers it, but it is simpler to stop it sleeping:
 
 1. **Keep the phone plugged in** (charging cable)
 2. **Developer Options > "Stay awake"** toggle ON (keeps screen on while charging)
@@ -52,6 +52,24 @@ local-bridge/start-bridge.sh
 ```
 
 This starts a local REST server on `http://localhost:8723/v1` that drives the phone over ADB. Leave it running while the agent works. `qa-agent/RUN.md` already points at it; there is nothing to configure.
+
+Check it from another terminal:
+
+```bash
+local-bridge/phonectl health
+```
+
+Optional settings (environment variables for `start-bridge.sh`):
+
+| Variable | What it does |
+|---|---|
+| `ADB_SERIAL` | Pin one device when several are attached |
+| `PHONE_PIN` | Lockscreen PIN, so `phonectl unlock` can get past it. Stays on your machine. |
+| `PHONE_BRIDGE_TOKEN` | Require `Authorization: Bearer <token>` on every call |
+| `BIND` | Listen address. Default `127.0.0.1`. Anything else requires a token. |
+| `PHONE_BRIDGE_ALLOW_SHELL=1` | Enable the raw `shell` endpoint (off by default) |
+
+`pip install pillow` is optional; with it the bridge downscales screenshots, which keeps image-model requests small.
 
 ## Step 4: Install Your App
 
